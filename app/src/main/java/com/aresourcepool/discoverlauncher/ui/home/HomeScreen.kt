@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -120,10 +121,16 @@ fun HomeScreen(
         modifier = modifier,
         snackbarHost = { SnackbarHost(SnackbarHostState()) }
     ) { padding ->
+        val layoutDirection = LocalLayoutDirection.current
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(
+                    start = padding.calculateLeftPadding(layoutDirection),
+                    top = 12.dp,
+                    end = padding.calculateRightPadding(layoutDirection),
+                    bottom = padding.calculateBottomPadding()
+                )
         ) {
             if (uiState.installPermissionMissing || !ApkInstallHelper.canInstallApk(context)) {
                 PermissionBanner(
@@ -276,10 +283,10 @@ private fun MyAppsHeader(
             )
         }
         Spacer(modifier = Modifier.height(16.dp))
-        Column(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedButton(
                 onClick = onRefresh,
@@ -295,6 +302,7 @@ private fun MyAppsHeader(
                 Text("Refresh", maxLines = 1)
             }
             if (updatesCount > 0) {
+                Spacer(modifier = Modifier.width(8.dp))
                 Button(
                     onClick = onUpdateAll,
                     colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary, contentColor = androidx.compose.ui.graphics.Color.White)
