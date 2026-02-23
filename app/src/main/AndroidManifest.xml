@@ -10,7 +10,8 @@
 
     <queries>
         <package android:name="com.aresourcepool.justtip" />
-        <!-- Add other package names your API returns so install state is visible -->
+        <package android:name="com.aresourcepool.vendingmachin" />
+        <package android:name="com.aresourcepool.dicovertoolvend" />
     </queries>
 
     <application

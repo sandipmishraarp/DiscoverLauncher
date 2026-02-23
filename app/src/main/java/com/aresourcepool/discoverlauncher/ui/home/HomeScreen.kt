@@ -20,7 +20,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
@@ -168,81 +167,92 @@ fun HomeScreen(
                     val installedCount = uiState.apks.count { it.isInstalled }
                     val updatesCount = uiState.apks.count { it.hasUpdate }
 
-                    MyAppsHeader(
-                        installedCount = installedCount,
-                        updatesCount = updatesCount,
-                        onRefresh = { viewModel.refresh() },
-                        onUpdateAll = {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            MyAppsHeader(
+                                installedCount = installedCount,
+                                updatesCount = updatesCount,
+                                onRefresh = { viewModel.refresh() },
+                                refreshing = uiState.isLoading,
+                                onUpdateAll = {
                             if (!ApkInstallHelper.canInstallApk(context)) {
                                 viewModel.setInstallPermissionMissing(true)
                                 onShowMessage("Allow install permission first.")
                                 return@MyAppsHeader
                             }
-                            viewModel.updateAll { apk -> viewModel.startDownload(apk) }
-                        }
-                    )
+                                    viewModel.updateAll { apk -> viewModel.startDownload(apk) }
+                                }
+                            )
 
-                    if (updatesCount > 0) {
-                        UpdatesBanner(updatesCount = updatesCount)
-                    }
+                            if (updatesCount > 0) {
+                                UpdatesBanner(updatesCount = updatesCount)
+                            }
 
-                    LazyColumn(
+                            LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.apks) { apk ->
-                            ApkListCard(
-                                apk = apk,
-                                downloadProgress = uiState.downloadProgress[apk.packageName],
-                                onAction = { a ->
-                                    when (a) {
-                                        ApkAction.Update -> changelogApk = apk
-                                        ApkAction.Install -> changelogApk = apk
-                                        ApkAction.Open -> {
-                                            if (!ApkInstallHelper.openApp(context, apk.packageName)) {
-                                                onShowMessage("Could not open app")
+                                items(uiState.apks) { apk ->
+                                    ApkListCard(
+                                        apk = apk,
+                                        downloadProgress = uiState.downloadProgress[apk.packageName],
+                                        onAction = { a ->
+                                            when (a) {
+                                                ApkAction.Update -> changelogApk = apk
+                                                ApkAction.Install -> changelogApk = apk
+                                                ApkAction.Open -> {
+                                                    if (!ApkInstallHelper.openApp(context, apk.packageName)) {
+                                                        onShowMessage("Could not open app")
+                                                    }
+                                                }
                                             }
-                                        }
-                                    }
-                                },
-                                onUninstall = {
-                                    if (!ApkInstallHelper.uninstallApp(context, apk.packageName)) {
-                                        onShowMessage("Could not open uninstall screen.")
-                                    }
-                                },
-                                onStartDownload = {
-                                    if (!ApkInstallHelper.canInstallApk(context)) {
-                                        viewModel.setInstallPermissionMissing(true)
-                                        onShowMessage("Allow install permission first.")
-                                        return@ApkListCard
-                                    }
-                                    viewModel.startDownload(apk)
-                                },
-                                onDetails = { changelogApk = apk }
-                            )
+                                        },
+                                        onStartDownload = {
+                                            if (!ApkInstallHelper.canInstallApk(context)) {
+                                                viewModel.setInstallPermissionMissing(true)
+                                                onShowMessage("Allow install permission first.")
+                                                return@ApkListCard
+                                            }
+                                            viewModel.startDownload(apk)
+                                        },
+                                        onDetails = { changelogApk = apk }
+                                    )
+                                }
+                            }
+                        }
+
+                        if (uiState.isLoading) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(color = GreenPrimary)
+                            }
                         }
                     }
 
                     changelogApk?.let { apk ->
                         ChangelogDialog(
-                            apk = apk,
-                            onDismiss = { changelogApk = null },
-                            onInstallOrUpdate = {
-                                changelogApk = null
-                                if (!ApkInstallHelper.canInstallApk(context)) {
-                                    viewModel.setInstallPermissionMissing(true)
-                                    onShowMessage("Allow install permission first.")
-                                    return@ChangelogDialog
+                                apk = apk,
+                                onDismiss = { changelogApk = null },
+                                onInstallOrUpdate = {
+                                    changelogApk = null
+                                    if (!ApkInstallHelper.canInstallApk(context)) {
+                                        viewModel.setInstallPermissionMissing(true)
+                                        onShowMessage("Allow install permission first.")
+                                        return@ChangelogDialog
+                                    }
+                                    viewModel.startDownload(apk)
+                                },
+                                onOpen = {
+                                    changelogApk = null
+                                    ApkInstallHelper.openApp(context, apk.packageName)
                                 }
-                                viewModel.startDownload(apk)
-                            },
-                            onOpen = {
-                                changelogApk = null
-                                ApkInstallHelper.openApp(context, apk.packageName)
-                            }
-                        )
-                    }
+                            )
+                        }
                 }
             }
         }
@@ -254,6 +264,7 @@ private fun MyAppsHeader(
     installedCount: Int,
     updatesCount: Int,
     onRefresh: () -> Unit,
+    refreshing: Boolean = false,
     onUpdateAll: () -> Unit
 ) {
     Column(
@@ -298,16 +309,25 @@ private fun MyAppsHeader(
         ) {
             OutlinedButton(
                 onClick = onRefresh,
+                enabled = !refreshing,
                 modifier = Modifier.widthIn(min = 120.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
             ) {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "Refresh list",
-                    modifier = Modifier.size(20.dp)
-                )
+                if (refreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = GreenPrimary,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Refresh list",
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Refresh", maxLines = 1)
+                Text(if (refreshing) "Refreshing…" else "Refresh", maxLines = 1)
             }
             if (updatesCount > 0) {
                 Spacer(modifier = Modifier.width(8.dp))
@@ -351,7 +371,6 @@ private fun ApkListCard(
     apk: ApkItem,
     downloadProgress: DownloadProgress?,
     onAction: (ApkAction) -> Unit,
-    onUninstall: () -> Unit,
     onStartDownload: () -> Unit,
     onDetails: () -> Unit
 ) {
@@ -444,18 +463,6 @@ private fun ApkListCard(
                     Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Details", style = buttonTextStyle, maxLines = 1)
-                }
-                if (apk.isInstalled) {
-                    OutlinedButton(
-                        onClick = onUninstall,
-                        modifier = Modifier.weight(1f),
-                        contentPadding = compactPadding,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
-                    ) {
-                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Uninstall", style = buttonTextStyle, maxLines = 1)
-                    }
                 }
                 if (apk.action == ApkAction.Install) {
                     Button(
