@@ -17,6 +17,7 @@ data class ApkDto(
     @SerializedName("changelog") val changelog: String? = null,
     @SerializedName("iconUrl") val iconUrl: String? = null,
     @SerializedName("playStoreUrl") val playStoreUrl: String? = null,
+    @SerializedName("installedVersionCode") val installedVersionCode: Long? = null,
     @SerializedName("developerName") val developerName: String? = null,
     @SerializedName("rating") val rating: Float? = null,
     @SerializedName("userCount") val userCount: String? = null

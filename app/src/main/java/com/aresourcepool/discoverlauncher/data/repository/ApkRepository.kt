@@ -6,8 +6,8 @@ import android.os.Build
 import com.aresourcepool.discoverlauncher.BuildConfig
 import com.aresourcepool.discoverlauncher.data.api.ApkApiService
 import com.aresourcepool.discoverlauncher.data.api.ApkDto
-import com.aresourcepool.discoverlauncher.data.fake.FakeApkData
 import com.aresourcepool.discoverlauncher.domain.model.ApkItem
+import com.aresourcepool.discoverlauncher.network.RelaxedSslClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import retrofit2.Retrofit
@@ -16,13 +16,14 @@ import java.net.UnknownHostException
 
 /**
  * Single source of truth for APK list.
- * Currently uses static fake data; uncomment API block and remove fake block when backend is ready.
+ * Fetches from API: GET {baseUrl}apk-list (wrapped response with type, message, data).
  */
 class ApkRepository(private val context: Context) {
 
     private val api: ApkApiService by lazy {
         Retrofit.Builder()
             .baseUrl(BuildConfig.APK_STORE_BASE_URL)
+            .client(RelaxedSslClient.okHttpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApkApiService::class.java)
@@ -31,29 +32,22 @@ class ApkRepository(private val context: Context) {
     private val packageManager: PackageManager get() = context.packageManager
 
     suspend fun fetchApkList(): Result<List<ApkItem>> = withContext(Dispatchers.IO) {
-        // --- Static fake JSON data (for now) ---
-        val fakeItems = FakeApkData.getFakeApkList().map { item ->
-            val installed = getInstalledVersionCode(item.packageName)
-            item.copy(installedVersionCode = installed ?: item.installedVersionCode)
+        try {
+            val response = api.getApkList()
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(
+                    ApiException("HTTP ${response.code()}: ${response.message()}")
+                )
+            }
+            val body = response.body()
+            val dtos = body?.data ?: emptyList()
+            val items = dtos.mapNotNull { dto -> dto.toApkItem(packageManager) }
+            Result.success(items)
+        } catch (e: UnknownHostException) {
+            Result.failure(NetworkException("No internet or host unreachable", e))
+        } catch (e: Exception) {
+            Result.failure(e)
         }
-        return@withContext Result.success(fakeItems)
-
-        // --- Uncomment below when backend API is ready ---
-        // try {
-        //     val response = api.getApkList()
-        //     if (!response.isSuccessful) {
-        //         return@withContext Result.failure(
-        //             ApiException("HTTP ${response.code()}: ${response.message()}")
-        //         )
-        //     }
-        //     val dtos = response.body() ?: emptyList()
-        //     val items = dtos.mapNotNull { dto -> dto.toApkItem(packageManager) }
-        //     Result.success(items)
-        // } catch (e: UnknownHostException) {
-        //     Result.failure(NetworkException("No internet or host unreachable", e))
-        // } catch (e: Exception) {
-        //     Result.failure(e)
-        // }
     }
 
     fun getInstalledVersionCode(packageName: String): Long? {

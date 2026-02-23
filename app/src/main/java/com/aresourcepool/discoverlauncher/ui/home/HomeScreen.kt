@@ -206,7 +206,11 @@ fun HomeScreen(
                                         }
                                     }
                                 },
-                                onUninstall = { activity?.let { ApkInstallHelper.uninstallApp(it, apk.packageName) } },
+                                onUninstall = {
+                                    if (!ApkInstallHelper.uninstallApp(context, apk.packageName)) {
+                                        onShowMessage("Could not open uninstall screen.")
+                                    }
+                                },
                                 onStartDownload = {
                                     if (!ApkInstallHelper.canInstallApk(context)) {
                                         viewModel.setInstallPermissionMissing(true)
@@ -224,7 +228,7 @@ fun HomeScreen(
                         ChangelogDialog(
                             apk = apk,
                             onDismiss = { changelogApk = null },
-                            onConfirm = {
+                            onInstallOrUpdate = {
                                 changelogApk = null
                                 if (!ApkInstallHelper.canInstallApk(context)) {
                                     viewModel.setInstallPermissionMissing(true)
@@ -232,6 +236,10 @@ fun HomeScreen(
                                     return@ChangelogDialog
                                 }
                                 viewModel.startDownload(apk)
+                            },
+                            onOpen = {
+                                changelogApk = null
+                                ApkInstallHelper.openApp(context, apk.packageName)
                             }
                         )
                     }
@@ -384,7 +392,7 @@ private fun ApkListCard(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        StatusPill(hasUpdate = hasUpdate)
+                        StatusPill(hasUpdate = hasUpdate, isInstalled = apk.isInstalled)
                     }
                     if (apk.developerName.isNotBlank()) {
                         Text(
@@ -449,6 +457,25 @@ private fun ApkListCard(
                         Text("Uninstall", style = buttonTextStyle, maxLines = 1)
                     }
                 }
+                if (apk.action == ApkAction.Install) {
+                    Button(
+                        onClick = {
+                            if (apk.changelog.isNotBlank()) onAction(ApkAction.Install) else onStartDownload()
+                        },
+                        enabled = !isDownloading,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = compactPadding,
+                        colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary, contentColor = androidx.compose.ui.graphics.Color.White)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isDownloading) "Downloading…" else "Install",
+                            style = buttonTextStyle,
+                            maxLines = 1
+                        )
+                    }
+                }
                 if (hasUpdate) {
                     Button(
                         onClick = {
@@ -474,12 +501,13 @@ private fun ApkListCard(
 }
 
 @Composable
-private fun StatusPill(hasUpdate: Boolean) {
-    val (bg, text) = if (hasUpdate) {
-        GreenPrimary to androidx.compose.ui.graphics.Color.White
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+private fun StatusPill(hasUpdate: Boolean, isInstalled: Boolean = true) {
+    val (bg, label) = when {
+        hasUpdate -> GreenPrimary to "Update Available"
+        !isInstalled -> MaterialTheme.colorScheme.surfaceVariant to "Not installed"
+        else -> MaterialTheme.colorScheme.surfaceVariant to "Up to date"
     }
+    val textColor = if (hasUpdate) androidx.compose.ui.graphics.Color.White else MaterialTheme.colorScheme.onSurfaceVariant
     Box(
         modifier = Modifier
             .clip(RoundedCornerShape(20.dp))
@@ -487,9 +515,9 @@ private fun StatusPill(hasUpdate: Boolean) {
             .padding(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
-            text = if (hasUpdate) "Update Available" else "Up to date",
+            text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = text
+            color = textColor
         )
     }
 }
@@ -545,8 +573,14 @@ private fun ErrorBanner(message: String, onDismiss: () -> Unit) {
 private fun ChangelogDialog(
     apk: ApkItem,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onInstallOrUpdate: () -> Unit,
+    onOpen: () -> Unit
 ) {
+    val (confirmText, onConfirmClick) = when {
+        apk.hasUpdate -> "Update" to onInstallOrUpdate
+        !apk.isInstalled -> "Install" to onInstallOrUpdate
+        else -> "Open" to onOpen
+    }
     androidx.compose.material3.AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("What's New — ${apk.appName}") },
@@ -558,8 +592,8 @@ private fun ChangelogDialog(
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) {
-                Text(if (apk.hasUpdate) "Update" else "Install")
+            Button(onClick = onConfirmClick, colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)) {
+                Text(confirmText)
             }
         },
         dismissButton = {

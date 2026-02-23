@@ -10,16 +10,16 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.aresourcepool.discoverlauncher.MainActivity
+import com.aresourcepool.discoverlauncher.network.RelaxedSslClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
 
 const val EXTRA_DOWNLOAD_URL = "download_url"
 const val EXTRA_PACKAGE_NAME = "package_name"
@@ -71,32 +71,23 @@ class ApkDownloadService : Service() {
         val dir = File(cacheDir, "apk").apply { mkdirs() }
         val file = File(dir, fileName)
         try {
-            var connection = URL(url).openConnection() as HttpURLConnection
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 60_000
-            connection.requestMethod = "GET"
-            connection.instanceFollowRedirects = true
-            connection.connect()
-            var redirectCount = 0
-            while (redirectCount < 5 && connection.responseCode in 301..308) {
-                val location = connection.getHeaderField("Location") ?: break
-                connection.disconnect()
-                connection = URL(location).openConnection() as HttpURLConnection
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 60_000
-                connection.requestMethod = "GET"
-                connection.connect()
-                redirectCount++
-            }
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                sendBroadcast(DownloadReceiver.intentFor(DownloadReceiver.STATUS_FAILED, packageName, 0, 100, "HTTP ${connection.responseCode}"))
+            val request = Request.Builder().url(url).build()
+            val response = RelaxedSslClient.okHttpClient.newCall(request).execute()
+            if (!response.isSuccessful) {
+                sendBroadcast(DownloadReceiver.intentFor(DownloadReceiver.STATUS_FAILED, packageName, 0, 100, "HTTP ${response.code}"))
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return
             }
-            val totalBytes = connection.contentLengthLong.takeIf { it > 0 } ?: -1L
+            val body = response.body ?: run {
+                sendBroadcast(DownloadReceiver.intentFor(DownloadReceiver.STATUS_FAILED, packageName, 0, 100, "Empty response"))
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return
+            }
+            val totalBytes = body.contentLength().takeIf { it > 0 } ?: -1L
             var readBytes = 0L
-            connection.inputStream.use { input ->
+            body.byteStream().use { input ->
                 FileOutputStream(file).use { output ->
                     val buffer = ByteArray(8192)
                     var read = input.read(buffer)

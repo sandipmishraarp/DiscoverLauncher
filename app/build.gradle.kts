@@ -14,7 +14,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-        buildConfigField("String", "APK_STORE_BASE_URL", "\"https://your-api.example.com/\"")
+        buildConfigField("String", "APK_STORE_BASE_URL", "\"http://65.1.252.120/justtip/v1/\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
