@@ -15,8 +15,19 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.net.UnknownHostException
 
 /**
+ * Package names from AndroidManifest <queries> — only these apps are shown in the list.
+ * List item is shown only when the app is already installed and has a newer version (update scenario).
+ */
+private val ALLOWED_PACKAGES = setOf(
+    "com.aresourcepool.justtip",
+    "com.aresourcepool.vendingmachin",
+    "com.aresourcepool.dicovertoolvend"
+)
+
+/**
  * Single source of truth for APK list.
  * Fetches from API: GET {baseUrl}apk-list (wrapped response with type, message, data).
+ * Only returns items that are in [ALLOWED_PACKAGES], already installed, and have a newer version (update only).
  */
 class ApkRepository(private val context: Context) {
 
@@ -41,7 +52,12 @@ class ApkRepository(private val context: Context) {
             }
             val body = response.body()
             val dtos = body?.data ?: emptyList()
-            val items = dtos.mapNotNull { dto -> dto.toApkItem(packageManager) }
+            val allItems = dtos.mapNotNull { dto -> dto.toApkItem(packageManager) }
+            val items = allItems.filter { item ->
+                item.packageName in ALLOWED_PACKAGES &&
+                    item.installedVersionCode != null &&
+                    item.latestVersionCode > item.installedVersionCode
+            }
             Result.success(items)
         } catch (e: UnknownHostException) {
             Result.failure(NetworkException("No internet or host unreachable", e))

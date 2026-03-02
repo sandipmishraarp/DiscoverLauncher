@@ -34,6 +34,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -154,13 +155,10 @@ fun HomeScreen(
                     }
                 }
                 uiState.apks.isEmpty() && !uiState.isLoading -> {
-                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = if (uiState.error != null) "Could not load apps" else "No apps available",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    EmptyStateContent(
+                        hasError = uiState.error != null,
+                        onRefresh = { viewModel.refresh() }
+                    )
                 }
                 else -> {
                     var changelogApk by remember { mutableStateOf<ApkItem?>(null) }
@@ -188,11 +186,16 @@ fun HomeScreen(
                                 UpdatesBanner(updatesCount = updatesCount)
                             }
 
-                            LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
+                            PullToRefreshBox(
+                                isRefreshing = uiState.isLoading,
+                                onRefresh = { viewModel.refresh() },
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentPadding = PaddingValues(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
                                 items(uiState.apks) { apk ->
                                     ApkListCard(
                                         apk = apk,
@@ -219,6 +222,7 @@ fun HomeScreen(
                                         onDetails = { changelogApk = apk }
                                     )
                                 }
+                            }
                             }
                         }
 
@@ -396,7 +400,7 @@ private fun ApkListCard(
                         .size(56.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentScale = ContentScale.Crop
+                    contentScale = ContentScale.Fit
                 )
                 Spacer(modifier = Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
@@ -549,6 +553,47 @@ private fun PermissionBanner(onOpenSettings: () -> Unit) {
                 modifier = Modifier.widthIn(min = 120.dp)
             ) {
                 Text("Open settings", maxLines = 1)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EmptyStateContent(
+    hasError: Boolean,
+    onRefresh: () -> Unit
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Text(
+                text = if (hasError) "Could not load apps" else "No apps available",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = if (hasError) "Check your connection and try again." else "No updates available right now. Pull down or tap Refresh to check again.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = onRefresh,
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+            ) {
+                Icon(
+                    Icons.Default.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Refresh")
             }
         }
     }
