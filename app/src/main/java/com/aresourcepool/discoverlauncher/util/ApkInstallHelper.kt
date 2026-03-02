@@ -11,7 +11,7 @@ import androidx.core.content.FileProvider
 import java.io.File
 
 /**
- * Helper for installing, opening, and uninstalling any app by package name.
+ * Helper for installing and opening apps by package name.
  * Handles Android 8+ "Install unknown apps" permission.
  */
 object ApkInstallHelper {
@@ -72,43 +72,5 @@ object ApkInstallHelper {
         } catch (_: Exception) {
             false
         }
-    }
-
-    /**
-     * Starts the system uninstall flow for the given package.
-     * Uses [Context] so it works even when [Activity] is not available.
-     * When called from an Activity, does not use NEW_TASK so the system can show uninstall in the same task.
-     * Returns true if the intent was started, false otherwise.
-     */
-    fun uninstallApp(context: Context, packageName: String): Boolean {
-        if (!isAppInstalled(context, packageName)) return false
-        val packageUri = Uri.fromParts("package", packageName, null)
-        val activity = context as? Activity
-        val intents = listOf(
-            Intent(Intent.ACTION_DELETE).apply {
-                data = packageUri
-                addCategory(Intent.CATEGORY_DEFAULT)
-                if (activity == null) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            },
-            Intent(Intent.ACTION_UNINSTALL_PACKAGE).apply {
-                data = packageUri
-                putExtra(Intent.EXTRA_RETURN_RESULT, true)
-                addCategory(Intent.CATEGORY_DEFAULT)
-                if (activity == null) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-        )
-        for (intent in intents) {
-            try {
-                if (activity != null) {
-                    activity.startActivity(intent)
-                } else {
-                    context.startActivity(intent)
-                }
-                return true
-            } catch (_: Exception) {
-                // Try next intent
-            }
-        }
-        return false
     }
 }
